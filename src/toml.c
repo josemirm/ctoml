@@ -8,26 +8,26 @@
 
 
 static inline int skipSpaces(TOML* t) {
-	while (isspace(t->str[t->lastPos] && t->lastPos < t->len)) {
-		t->lastPos++;
+	while (isspace(t->str[t->pos]) && (t->pos < t->len)) {
+		t->pos++;
 	}
 
-	if (t->lastPos == t->len) return 1;
+	if (t->pos == t->len) return 1;
 
 	return 0;
 }
 
 
 static inline int skipComments(TOML * t) {
-	if (t->str[t->lastPos] == '#') {
-		char* endComment = strchr(&(t->str[t->lastPos]), '\n');
+	if (t->str[t->pos] == '#') {
+		char* endComment = strchr(&(t->str[t->pos]), '\n');
 		if (!endComment || *endComment == '\0') {
-			t->lastPos = t->len;
+			t->pos = t->len;
 			return 1;
 		}
 
 		int newPos = (int)(endComment - t->str);
-		t->lastPos = newPos;
+		t->pos = newPos;
 	}
 
 	return 0;
@@ -36,23 +36,26 @@ static inline int skipComments(TOML * t) {
 
 static int processPossibleTable(TOML* t) {
 	// If a table is found
-	if (t->str[t->lastPos] == '[') {
+	if (t->str[t->pos] == '[') {
 		// If an array of tables is found
 		// TODO: Not currently supported
-		if (t->str[t->lastPos + 1] == '[') {
+		if (t->str[t->pos + 1] == '[') {
 			t->lastError = TOMLUnsuportedErr;
 			return -1;
 		}
 
+		// Skips the '[' character
+		t->pos++;
+
 		// Otherwise, if finds the end of the declaration of the table
-		char* tableEnd = strchr(t->str, ']');
+		char* tableEnd = strchr(&(t->str[t->pos]), ']');
 		if (!tableEnd) {
 			t->lastError = TOMLFormatErr;
 			return -1;
 		}
 
 		// Get the length of the table name
-		int tableLen = (int)(tableEnd - t->str);
+		int tableLen = (int)(tableEnd - &(t->str[t->pos]));
 		if (tableLen == 1) {
 			t->lastError = TOMLFormatErr;
 			return -1;
@@ -64,9 +67,13 @@ static int processPossibleTable(TOML* t) {
 		}
 
 		// Copy the table name to the buffer
-		memcpy(t->buffer, t->str, tableLen);
+		memcpy(t->buffer, &(t->str[t->pos]), tableLen);
 		t->buffer[tableLen] = '\0';
-		t->lastPos += tableLen + 1;
+
+		// Skip the closing sign of the table and the spaces up next
+		t->pos += tableLen + 1;
+		skipSpaces(t);
+
 		return 1;
 	}
 
@@ -74,64 +81,65 @@ static int processPossibleTable(TOML* t) {
 } // static int processPossibleTable()
 
 
-static int skipLongString(TOML* t, char const* nextNewline) {
-	if (t->len > (t->lastPos + 5)){ // 5 quotation marks + 1 quotation mark in 'lastPos' position
+static int skipEntryValue(TOML* t, char const* nextNewline) {
+	// First try to skip a multi-line (long) string
+	if (t->len > (t->pos + 5)){ // 5 quotation marks + 1 quotation mark in 'pos' position
 		char* endLongStr;
 
-		if (t->str[t->lastPos] == '\"' &&
-			t->str[t->lastPos+1] == '\"' &&
-			t->str[t->lastPos+2] == '\"') {
+		if (t->str[t->pos] == '\"' &&
+			t->str[t->pos+1] == '\"' &&
+			t->str[t->pos+2] == '\"') {
 
-			// Does lastPos + 3 to skip the three first quotes
-			endLongStr = strstr(&(t->str[t->lastPos + 3]), "\"\"\"");
+			// Does pos + 3 to skip the three first quotes
+			endLongStr = strstr(&(t->str[t->pos + 3]), "\"\"\"");
 			if (!endLongStr) {
 				t->lastError = TOMLFormatErr;
 				return TOMLFormatErr;
 			}
 
 			// Get the pos 3 of the string to skip the three last quotes
-			t->lastPos = (int)(&(endLongStr[3]) - t->str);
-		} else if (t->str[t->lastPos] == '\'' &&
-			t->str[t->lastPos+1] == '\'' &&
-			t->str[t->lastPos+2] == '\'') {
+			t->pos = (int)(&(endLongStr[3]) - t->str);
+		} else if (t->str[t->pos] == '\'' &&
+			t->str[t->pos+1] == '\'' &&
+			t->str[t->pos+2] == '\'') {
 
-			// Does lastPos + 3 to skip the three first quotes
-			endLongStr = strstr(&(t->str[t->lastPos + 3]), "\'\'\'");
+			// Does pos + 3 to skip the three first quotes
+			endLongStr = strstr(&(t->str[t->pos + 3]), "\'\'\'");
 			if (!endLongStr) {
 				t->lastError = TOMLFormatErr;
 				return TOMLFormatErr;
 			}
 
 			// Get the pos 3 of the string to skip the three last quotes
-			t->lastPos = (int)(&(endLongStr[3]) - t->str);
+			t->pos = (int)(&(endLongStr[3]) - t->str);
 		} else {
-			// If no long string found, go to the next line (or the end of
+			// If no multi-line string found, go to the next line (or the end of
 			// the string if no newline exists)
 			if (nextNewline) {
-				t->lastPos = (int)(&(nextNewline[1]) - t->str);
-				if (t->lastPos > t->len) {
-					t->lastPos = t->len;
+				t->pos = (int)(&(nextNewline[1]) - t->str);
+				if (t->pos > t->len) {
+					t->pos = t->len;
 				}
 			} else {
-				t->lastPos = t->len;
+				t->pos = t->len;
 			}
 		}
 	} else {
 		// This is the case where the string we're working on isn't long enough
-		// to have a long TOML string, so we get to the next newline, or to the
+		// to have a multi-line TOML string, so we get to the next newline, or to the
 		// end of the document if it isn't no newline.
 		if (nextNewline) {
-			t->lastPos = (int)(&(nextNewline[1]) - t->str);
-			if (t->lastPos > t->len) {
-				t->lastPos = t->len;
+			t->pos = (int)(&(nextNewline[1]) - t->str);
+			if (t->pos > t->len) {
+				t->pos = t->len;
 			}
 		} else {
-			t->lastPos = t->len;
+			t->pos = t->len;
 		}
 	}
 
 	return 0;
-} // static int skipLongString()
+} // static int skipEntryValue()
 
 
 static int processKeyStmt(TOML* t, char const* key) {
@@ -140,64 +148,72 @@ static int processKeyStmt(TOML* t, char const* key) {
 	// The equal sign to assign the value should be in the same line than the
 	// name declaration, so no '\n' should exist before any equal sign.
 
-	char* nextEqualSign = strchr(&(t->str[t->lastPos]), '=');
-	char* nextNewline = strchr(&(t->str[t->lastPos]), '\n');
+	char* nextEqualSign = strchr(&(t->str[t->pos]), '=');
+	char* nextNewline = strchr(&(t->str[t->pos]), '\n');
 
 	if (!nextEqualSign) {
 		return -1;
 	}
 
-	if (nextNewline < nextEqualSign) {
+	if ((nextNewline != NULL) && (nextNewline < nextEqualSign)) {
 		t->lastError = TOMLFormatErr;
 		return TOMLFormatErr;
 	}
 
-	// We need to consider the table this entry is on to compare to the given key
-	int tableLen = (int)strlen(t->buffer);
+	int prevBufferLen = (int)strlen(t->buffer);
 
 	// Skipping backwards both the equal sign and the the spaces before the
 	// found key
 	char* entryKeyEnd = nextEqualSign;
 	do {
 		entryKeyEnd = &(entryKeyEnd[-1]);
-	} while (entryKeyEnd > &(t->str[t->lastPos]) && isspace(entryKeyEnd[0]));
+	} while (entryKeyEnd > &(t->str[t->pos]) && isspace(entryKeyEnd[0]));
 
 	// With all the previous checks, this asserted situation shouldn't happen
-	assert(entryKeyEnd > &(t->str[t->lastPos]));
+	assert(entryKeyEnd > &(t->str[t->pos]));
 
-	// Copy the found entry key to the buffer to compare it
-	int foundEntryLen = (int)(entryKeyEnd - &(t->str[t->lastPos]) + 1); // Does not include '\0'
-	// The addition of '2' includes the '.' that separates table to key and the '\0'
-	if ((tableLen + foundEntryLen + 2) > TOML_BUFFER_SIZE) {
+	int foundEntryLen = (int)(entryKeyEnd - &(t->str[t->pos]) + 1); // Does not include '\0'
+	
+	// If no previous table entry was found, it compares the key with the found
+	// entry key directly. Otherwise, it will add the found entry to the table
+	// name temporally.
+	// At the end, the buffer should be restored as its previous state.
+	
+	// Check if the buffer is big enough to write inside the entry. The '+2' in
+	// the first case is to count the '.' between the table and the entry and the
+	// '\0'. The other case only have the '+1' for the '\0'
+	if ((prevBufferLen > 0) && ((prevBufferLen + foundEntryLen + 2) > TOML_BUFFER_SIZE) ||
+		(prevBufferLen == 0) && ((foundEntryLen + 1) > TOML_BUFFER_SIZE)) {
 		t->lastError = TOMLBufferErr;
 		return TOMLBufferErr;
 	}
 
-	printDebug("Buffer with only table");
-	printDebug(t->buffer);
-
-	t->buffer[tableLen] = '.';
-	memcpy(&(t->buffer[tableLen + 1]), &(t->str[t->lastPos]), foundEntryLen);
-	t->buffer[tableLen + 1 + foundEntryLen] = '\0';
-
-	printDebug("Buffer after entry added");
-	printDebug(t->buffer);
+	if (prevBufferLen > 0) {
+		t->buffer[prevBufferLen] = '.';
+		memcpy(&(t->buffer[prevBufferLen + 1]), &(t->str[t->pos]), foundEntryLen);
+		t->buffer[foundEntryLen + prevBufferLen + 1] = '\0';
+	}
+	else {
+		memcpy(t->buffer, &(t->str[t->pos]), foundEntryLen);
+		t->buffer[foundEntryLen] = '\0';
+	}
 
 	// If the found key is equal to the given one, then its found, otherwise
 	// it will need to continue
 	int returnPos = -1;
 	if (strcmp(key, t->buffer) == 0) {
-		// Return the value after the equal sign
-		returnPos = (int)(&(nextEqualSign[1]) - t->str);
+		// Return the key position after the equal sign skipping any spaces
+		t->pos = (int)(&(nextEqualSign[1]) - t->str);
+		skipSpaces(t);
+		returnPos = t->pos;
 	}
 
-	// Either way, found or not, we have to reach to the end of the value
-	// declaration to being able to process the next ones if needed, and
-	// bring the 'lastPost' variable to a correct position.
-	skipSpaces(t);
+	// Return the state of the buffer. It's "double-checked" here to remove
+	// warnings about buffer overrunning.
+	t->buffer[prevBufferLen] = '\0';
 
-	// Skip the special case of multi-line strings
-	if (skipLongString(t, nextNewline) < 0) return t->lastError;
+	// If this entry isn't what it was looking for, skip its value
+	if ((returnPos < 0) && (skipEntryValue(t, nextNewline) < 0)) return t->lastError;
 
 	return returnPos;
 } // processKeyStmt()
@@ -207,26 +223,28 @@ static int findKeyValPos(TOML* t, char const* key) {
 	assert(t != NULL);
 	assert(key != NULL);
 
-	// Not needed here to call checkValidTOML() as it was called previously by
-	// the parent functions calling this.
-
 	// If this start to read from the middle, this will make it read the
 	// rest until the end, and then, from the start to that middle position.
-	int initialRunPos = t->lastPos;
+	int initialRunPos = t->pos;
 	bool wrappedAround = false;
+	bool inCurrentTable = true;
 
 	for (;;) {
 		// Checks if it can continue with a possible wrap around
-		if (wrappedAround && (t->lastPos > initialRunPos)) {
+		if (wrappedAround && (t->pos > initialRunPos)) {
 			return -1;
 		}
 
 		// Checks if it has arrived to the end and needs to read from the start
-		if (t->lastPos >= t->len) {
+		if (t->pos >= t->len) {
 			if (initialRunPos == 0) return -1;
 
 			wrappedAround = true;
-			t->lastPos = 0;
+			t->pos = 0;
+
+			// Statements at the start won't belong to previously found tables
+
+			t->buffer[0] = '\0';
 		}
 
 		// Skip any spaces before processing. If it reaches the end, restarts
@@ -240,44 +258,33 @@ static int findKeyValPos(TOML* t, char const* key) {
 		int tableFound = processPossibleTable(t);
 		if (tableFound == -1) return -1;
 
-		// If a table is found, it need to check if the key belongs to that table
+		// Check if the table found belongs to the key or not.
 		if (tableFound == 1) {
-			if (strstr(t->str, t->buffer) == t->str) {
-				// The value belongs to the table, so it search if any of the
-				// entries of the table is what it's looking for
-				continue;
-			} else {
-				// The value doesn't belongs to the table, so it will need to
-				// find a new table. The buffer is reset to 'remove' that non
-				// valid table.
-				t->buffer[0] = '\0';
+			inCurrentTable = ( strstr(key, t->buffer) == key );
+		}
 
-				// Now, all the entries up next to the table belongs to it, so
-				// we need to skip all of those entries and find the next table
-				// (or the end of the document).
-
-				// If it got to the end of the string, it won't be possible to find another table
-				if (t->str[t->lastPos] == '\0') continue;
-
-				char* foundTable = strchr(t->str, '[');
-				if (foundTable) {
-					// If it found another table, process it
-					t->lastPos = (int)(foundTable - t->str);
-					continue;
-				} else {
-					// If it doesn't found any, maybe it need to wrap around
-					t->lastPos = t->len;
-					continue;
-				}
+		// If the key is not in the current table, it will have to skip until
+		// the next table in found.
+		if (!inCurrentTable) {
+			char* nextNewline = strchr(&(t->str[t->pos + 1]), '\n');
+			if (nextNewline) {
+				t->pos = (int)(nextNewline - t->str + 1);
 			}
+
+			continue;
 		}
 
 		int retProcessKeyStmt = processKeyStmt(t, key);
 		if (retProcessKeyStmt < -1) {
+			// Some error found
 			return retProcessKeyStmt;
+
 		} else if (retProcessKeyStmt == -1) {
+			// The key readed isn't what it was looking for
 			continue;
+
 		} else {
+			// The key found was what it was looking for
 			return retProcessKeyStmt;
 		}
 	} // for (;;)
@@ -326,7 +333,7 @@ static int compareStrBool(char const* str) {
 
 
 // Everytime a public TOML function get called, do this check
-static inline int checkValidTOML(TOML* t) {
+static inline int checkValidTOMLStructure(TOML* t) {
 	assert(t != NULL && t->str != NULL);
 	if ((t != NULL) && (t->str != NULL) && (strlen(t->str) > 0)) return 0;
 	return -1;
@@ -344,13 +351,13 @@ TOML initTOML(char const* str) {
 	if (str == NULL) {
 		ret.str = NULL;
 		ret.lastError = TOMLInputError;
-		ret.lastPos = -1;
+		ret.pos = -1;
 		ret.len = -1;
 	};
 
 	ret.str = str;
 	ret.len = (int)strlen(str);
-	ret.lastPos = 0;
+	ret.pos = 0;
 	ret.lastError = TOMLNoError;
 
 	return ret;
@@ -362,7 +369,7 @@ int getTOMLbool(TOML* t, char const* key, bool* value) {
 	assert(key != NULL);
 
 	if (key == NULL) return -1;
-	if (checkValidTOML(t)) return -1;
+	if (checkValidTOMLStructure(t)) return -1;
 
 	int keyPos = findKeyValPos(t, key);
 	if (keyPos < 0) return keyPos;
@@ -386,7 +393,7 @@ int getTOMLstr(TOML* t, char const* key, char* value, const int maxLen) {
 	assert(key != NULL);
 
 	if (key == NULL) return -1;
-	if (checkValidTOML(t)) return -1;
+	if (checkValidTOMLStructure(t)) return -1;
 
 	return -1;
 }
@@ -397,7 +404,7 @@ int getTOMLint(TOML* t, char const* key, int* value) {
 	assert(key != NULL);
 
 	if (key == NULL) return -1;
-	if (checkValidTOML(t)) return -1;
+	if (checkValidTOMLStructure(t)) return -1;
 
 	return -1;
 }
@@ -408,7 +415,7 @@ int getTOMLdouble(TOML* t, char const* key, double* value) {
 	assert(key != NULL);
 
 	if (key == NULL) return -1;
-	if (checkValidTOML(t)) return -1;
+	if (checkValidTOMLStructure(t)) return -1;
 
 	return -1;
 }

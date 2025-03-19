@@ -15,9 +15,9 @@ typedef struct {
 int main(void) {
 
 	const char* simpleStr = "\
-[servers.alpha]\
-ip = \"10.0.0.1\"\
-role = \"frontend\"\
+[servers.alpha]\n\
+ip = \"10.0.0.1\"\n\
+role = \"frontend\"\n\
 active = true";
 
 	Server_t values;
@@ -30,8 +30,8 @@ active = true";
 	printf("ret: %d\n", ret);
 	if (ret < 0) {
 		printf("Error found: %d\n", toml.lastError);
+		return 1;
 	}
-
 
 	return 0;
 }

@@ -1,21 +1,20 @@
 # ctoml-embedded
 An easier to use and highly-portable TOML C library.
 
-This library only use  a small internal buffer and a given string with the TOML data, and that is
-the reason which makes it very competent to be used in an embedded environment, where memory is
-scarce and dynamic memory might not be allowed, if it's even possible.
+This library only use a small internal buffer and a given string with the TOML
+data, and no dynamic memory is needed in any way.
 
 ## Description
 __Attention__: This is an early alpha WIP project. Currently is non-functional
 
 ### What is done:
-- Primary parsing of the content of the data
+- Primary parsing the structure of the content
 - Basic format error checking
 - Most helper functions to getting the rest of the values
+- Getting booleans from the TOML data
 
 ### What needs to be done
 - Getting the different types of values
-- Debug the main parsing functions
 
 ## License
 

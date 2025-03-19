@@ -21,15 +21,13 @@ enum TOMLError {TOMLNoError=0, TOMLFormatErr=-2, TOMLBufferErr=-3, TOMLUnsuporte
 
 typedef struct TOML_t {
 	const char* str;
-	int lastPos;
+	int pos;
 	int len;
 	enum TOMLError lastError;
 	char buffer[TOML_BUFFER_SIZE];
 } TOML;
 
 TOML initTOML(char const* str);
-
-int checkTOMLErrorFound(TOML* t);
 
 int getTOMLbool(TOML* t, char const* key, bool* value);
 int getTOMLstr(TOML* t, char const* key, char* value, const int maxLen);
