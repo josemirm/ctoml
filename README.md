@@ -15,6 +15,9 @@ __Attention__: This is an early alpha WIP project. Currently is non-functional
 
 ### What needs to be done
 - Getting the different types of values
+- Testing on different platforms
+- Adding more testing cases
+- Converting UTF-16 to UTF-8 when processing strings
 
 ## License
 

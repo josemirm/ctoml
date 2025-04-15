@@ -160,7 +160,9 @@ static int processKeyStmt(TOML* t, char const* key) {
 		return TOMLFormatErr;
 	}
 
-	int prevBufferLen = (int)strlen(t->buffer);
+	// Using this variable as unsigned to just to control more easily negative
+	// from '-1' or really big values as size_t from strlen()
+	unsigned int prevBufferLen = (unsigned int)strlen(t->buffer);
 
 	// Skipping backwards both the equal sign and the the spaces before the
 	// found key
@@ -173,12 +175,12 @@ static int processKeyStmt(TOML* t, char const* key) {
 	assert(entryKeyEnd > &(t->str[t->pos]));
 
 	int foundEntryLen = (int)(entryKeyEnd - &(t->str[t->pos]) + 1); // Does not include '\0'
-	
+
 	// If no previous table entry was found, it compares the key with the found
 	// entry key directly. Otherwise, it will add the found entry to the table
 	// name temporally.
 	// At the end, the buffer should be restored as its previous state.
-	
+
 	// Check if the buffer is big enough to write inside the entry. The '+2' in
 	// the first case is to count the '.' between the table and the entry and the
 	// '\0'. The other case only have the '+1' for the '\0'
@@ -291,6 +293,258 @@ static int findKeyValPos(TOML* t, char const* key) {
 } // static int findKeyValPos()
 
 
+static int writeUnicodeCharsFromHex(char const* input, char* outBuffer) {
+	// TODO. This is not trivial
+	return TOMLOtherErr;
+}
+
+
+static int processEscapedChars(char const* input, char* outBuffer, int* copiedPtr, const int maxLen) {
+	// Except with the Unicode escaped chars, it only skips two chars everytime
+	const int amountSkipped = 2;
+
+	// Check if the output can have the Unicode(s) char(s) or the escaped char
+	//  and a '\0'.
+	if ( ((input[1] == 'U') && ((*copiedPtr + 3) > maxLen)) ||
+		 ((*copiedPtr + 2) > maxLen) ) {
+		return TOMLOutputBufferTooSmall;
+	}
+
+	switch (input[1]) {
+	case 'b':
+		outBuffer[0] = '\b';
+		break;
+
+	case 't':
+		outBuffer[0] = '\t';
+		break;
+
+	case 'n':
+		outBuffer[0] = '\n';
+		break;
+
+	case 'f':
+		outBuffer[0] = '\f';
+		break;
+
+	case 'r':
+		outBuffer[0] = '\r';
+		break;
+
+	case '"':
+		outBuffer[0] = '\"';
+		break;
+
+	case '\\':
+		outBuffer[0] = '\\';
+		break;
+
+	case 'u':
+		return writeUnicodeCharsFromHex(&(input[1]), outBuffer);
+
+	case 'U':
+		return writeUnicodeCharsFromHex(&(input[1]), outBuffer);
+
+	default:
+		return TOMLFormatErr;
+	}
+
+	// Add one to the count of characters copied to the output buffer
+	++(*copiedPtr);
+
+	return amountSkipped;
+}
+
+
+static int processEscapedString(char const* input,
+	char const* strEnd, const int inputLen, char* output, const int maxOutLen, bool longLine) {
+	// If it is a normal string, it will need to convert the escape
+	// characters to what they represent.
+	
+	int copied = 0;
+
+	// This is done to skip the first '\"' delimiting the string.
+	char* str = (char*) &(input[1]);
+
+	// This will copy a limited amount of characters
+	while (copied < inputLen && str < strEnd) {
+		unsigned int amountToCopy;
+		char* nextEscapedChar = strchr(str, '\\');
+		if (nextEscapedChar == NULL || nextEscapedChar > strEnd) {
+			// No escaped character what's remaining to copy in this
+			// string, so it can simply copy it directly to the outbut
+			// buffer.
+			amountToCopy = (int)(strEnd - str);
+			nextEscapedChar = NULL;
+		} else {
+			// There are escaped characters in the middle of in the
+			// way, so it only copy the portion before them.
+			amountToCopy = (int)(nextEscapedChar - str);
+		}
+
+		if ((amountToCopy + 1) > maxOutLen) return TOMLOutputBufferTooSmall;
+		if (amountToCopy > 0) {
+			memcpy(&(output[copied]), str, amountToCopy);
+			copied += amountToCopy;
+			str = &(str[amountToCopy]);
+		}
+
+		// If not more escaped chars are present the whole string was copied in the
+		// previous statement.
+		if (nextEscapedChar == NULL) break;
+
+		// Oherwise, it process the remaining escaped chars present
+		int countToSkip;
+
+		// When processing a long line with escaped chars, it has to process
+		// when a line ends with a '\' and a some whitespace to skip it.
+		if (longLine && isspace(str[1])) {
+			str = &(str[2]);
+			// In that case just skip those unwanted characters
+			while (isspace(str[0])) {
+				str = &(str[1]);
+			}
+
+			continue;
+
+		} else {
+			countToSkip = processEscapedChars(nextEscapedChar,
+				&(output[copied]), &copied, maxOutLen);
+		}
+
+		if (countToSkip < 2) return countToSkip;
+		str = &(str[countToSkip]);
+	} // while ()
+
+	output[copied] = '\0';
+	return copied;
+} // static int processEscapedString()
+
+
+static char* getEndEscpdSimpleString(char const* str) {
+	// Get the next end of the line, and if it does not exist, get to the end of
+	// the string (the null terminator).
+	char* lastStrChar = strchr(str, '\n');
+	
+	if (!lastStrChar) {
+		lastStrChar = (char*) &(str[strlen(str) - 1]);
+	} else {
+		// Skip carriage return if it exists
+		if (lastStrChar[-1] == '\r') {
+			lastStrChar = &(lastStrChar[-2]);
+		} else {
+			lastStrChar = &(lastStrChar[-1]);
+		}
+	}
+
+	if (lastStrChar[0] == '"') {
+		return lastStrChar;
+	}
+
+	return NULL;
+}
+
+
+static int extractStrFromValue(char const* input, char* returnValue, const int maxLen) {
+	char* str = NULL;
+	char* strEnd = NULL;
+	bool isLiteralString = false;
+
+	// First check if it's a multiline string or not
+	if (strlen(input) > 5) {
+		if (input[0] == '\"' && input[1] == '\"' && input[2] == '\"') {
+			strEnd = strstr(&(input[3]), "\"\"\"");
+			if (strEnd == NULL) return TOMLFormatErr;
+			str = (char*) &(input[3]);
+			strEnd = &(strEnd[-1]);
+
+		} else if (input[0] == '\'' && input[1] == '\'' && input[2] == '\'') {
+			strEnd = strstr(&(input[3]), "\'\'\'");
+			if (strEnd == NULL) return TOMLFormatErr;
+			str = (char*) &(input[3]);
+			strEnd = &(strEnd[-1]);
+			isLiteralString = true;
+		}
+	}
+
+	// If 'str' isn't defined, it isn't a multi-string
+	if (!str) {
+		// Skips the string delimitar (\' or \")
+		str = (char*) (&input[1]);
+
+		// Checks the if there are any format error and get if the string is
+		// literal or not
+		if (input[0] == '\'') {
+			isLiteralString = true;
+			strEnd = (char*) strchr(str, '\'');
+
+		} else if (input[0] == '\"') {
+			strEnd = getEndEscpdSimpleString(str);
+			if (!strEnd) return TOMLFormatErr;
+
+		} else {
+			return TOMLFormatErr;
+		}
+
+		int strLen = (int)(strEnd - str);
+
+		if (isLiteralString) {
+			// First, the easy part: If it's just a literal string, it only need to
+			// copy its contents to the given buffer.
+			if ((strLen + 1) > maxLen) return TOMLOutputBufferTooSmall;
+
+			// If it's just an empty string, it will only have to add the '\0' and
+			// return.
+			if (strLen == 0) {
+				returnValue[0] = '\0';
+				return 0;
+			}
+
+			// Copy the string and add a null terminator.
+			memcpy(returnValue, str, strLen);
+			returnValue[strLen] = '\0';
+			return strLen;
+		} else {
+			return processEscapedString(input, strEnd, strLen, returnValue,
+				maxLen, false);
+
+		} // if (literalString) {} else {}
+
+
+	} else {
+		// Skip the first newline if exists. Could be CRLF or LF ended.
+		if (str[0] == '\n') str = (char*) &(str[1]);
+		if (str[0] == '\r' && str[1] == '\n') str = (char*) &str[2];
+
+		int strLen = (int)(strEnd - str);
+		// Only add a null terminator in the case of an empty string
+		if (strLen == 0) {
+			returnValue[0] = '\0';
+			return 0;
+		}
+
+		if (isLiteralString) {
+			// Check if the buffer is big enough to copy the string content
+			if ((strLen + 1) > maxLen) return TOMLOutputBufferTooSmall;
+
+			// Copy the string to the output buffer and add a null terminator
+			memcpy(returnValue, str, strLen);
+			returnValue[strLen] = '\0';
+			return strLen;
+		} else {
+			// It process that multi-line string like a normal one. The main
+			// difference in both is just skipping spaces after an escaped
+			// newline.
+			return processEscapedString(input, strEnd, strLen, returnValue,
+				maxLen, true);
+		}
+
+	} // if (!str) {} else {}
+
+	return TOMLOtherErr;
+} // static int extractStrFromValue()
+
+
 static int compareStrBool(char const* str) {
 	assert(str != NULL);
 
@@ -359,6 +613,7 @@ TOML initTOML(char const* str) {
 	ret.len = (int)strlen(str);
 	ret.pos = 0;
 	ret.lastError = TOMLNoError;
+	ret.buffer[0] = '\0';
 
 	return ret;
 }
@@ -377,10 +632,10 @@ int getTOMLbool(TOML* t, char const* key, bool* value) {
 	int comparison = compareStrBool(&(t->str[keyPos]));
 
 	if (comparison == 0) {
-		*value = false;
+		if (value != NULL) *value = false;
 		return 0;
 	} else if (comparison == 1) {
-		*value = true;
+		if (value != NULL) *value = true;
 		return 1;
 	}
 
@@ -395,7 +650,13 @@ int getTOMLstr(TOML* t, char const* key, char* value, const int maxLen) {
 	if (key == NULL) return -1;
 	if (checkValidTOMLStructure(t)) return -1;
 
-	return -1;
+	int keyPos = findKeyValPos(t, key);
+	if (keyPos < 0) return keyPos;
+
+	int ret = extractStrFromValue((&t->str[t->pos]), value, maxLen);
+	if (ret < 0) t->lastError = ret;
+
+	return ret;
 }
 
 

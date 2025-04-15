@@ -17,7 +17,16 @@
 #define TOML_BUFFER_SIZE 64
 #endif
 
-enum TOMLError {TOMLNoError=0, TOMLFormatErr=-2, TOMLBufferErr=-3, TOMLUnsuportedErr=-4, TOMLInputError=-5, TOMLOtherErr=-100};
+enum TOMLError {
+	TOMLNoError = 0,
+	TOMLKeyNotFound = -1,
+	TOMLFormatErr = -2,
+	TOMLBufferErr = -3,
+	TOMLUnsuportedErr = -4,
+	TOMLInputError = -5,
+	TOMLOutputBufferTooSmall = -6,
+	TOMLOtherErr = -100
+};
 
 typedef struct TOML_t {
 	const char* str;

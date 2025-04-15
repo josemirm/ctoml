@@ -6,13 +6,16 @@
 #include <stdio.h>
 #include "../src/toml.h"
 
-typedef struct {
-	char ip[64];
-	char role[32];
-	bool active;
-} Server_t;
 
-int main(void) {
+#define getTestResults(n, res) printf("\n ->Test %d: %s\n\n", n, (res == 0)? "PASSED":"FAILED");
+
+
+int test1() {
+	typedef struct {
+		char ip[64];
+		char role[32];
+		bool active;
+	} Server_t;
 
 	const char* simpleStr = "\
 [servers.alpha]\n\
@@ -32,6 +35,53 @@ active = true";
 		printf("Error found: %d\n", toml.lastError);
 		return 1;
 	}
+
+	return 0;
+}
+
+
+int test2 () {
+	int bufSize = 256;
+	char buffer[256];
+	int ret = 0;
+
+	const char* someStr = "\
+str1 = \"I\'m a string. \\\"You can quote me\\\".\"\n\
+\n\
+str2 = \"\"\"\\\n\
+       The quick brown \\\n\
+       fox jumps over \\\n\
+       the lazy dog.\\\n\
+       \"\"\"\n\
+";
+
+	printf("Content of someStr: \n%s\nTest start:\n", someStr);
+
+	TOML toml = initTOML(someStr);
+	int ret1 = getTOMLstr(&toml, "str1", buffer, bufSize);
+	if (ret1 < 0) {
+		printf("Error getting str1: %d\n", toml.lastError);
+		ret = ret1;
+	} else {
+		printf("str1: %s\n", buffer);
+	}
+
+	int ret2 = getTOMLstr(&toml, "str2", buffer, bufSize);
+	if (ret2 < 0) {
+		printf("Error getting str2: %d\n", toml.lastError);
+		ret = ret2;
+	} else {
+		printf("str2: %s\n", buffer);
+	}
+
+	return ret;
+}
+
+
+
+int main(void) {
+	//getTestResults(1, test1());
+	getTestResults(2, test2());
 
 	return 0;
 }
