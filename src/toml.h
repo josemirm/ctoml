@@ -20,11 +20,12 @@
 enum TOMLError {
 	TOMLNoError = 0,
 	TOMLKeyNotFound = -1,
-	TOMLFormatErr = -2,
-	TOMLBufferErr = -3,
-	TOMLUnsuportedErr = -4,
-	TOMLInputError = -5,
-	TOMLOutputBufferTooSmall = -6,
+	TOMLInvalidValue = -2,
+	TOMLFormatErr = -3,
+	TOMLBufferErr = -4,
+	TOMLUnsuportedErr = -5,
+	TOMLInputError = -6,
+	TOMLOutputBufferTooSmall = -7,
 	TOMLOtherErr = -100
 };
 

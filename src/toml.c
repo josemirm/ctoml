@@ -357,14 +357,12 @@ static int processEscapedChars(char const* input, char* outBuffer, int* copiedPt
 
 
 static int processEscapedString(char const* input,
-	char const* strEnd, const int inputLen, char* output, const int maxOutLen, bool longLine) {
+	char const* strEnd, const int inputLen, char* output, const unsigned int maxOutLen, bool longLine) {
 	// If it is a normal string, it will need to convert the escape
 	// characters to what they represent.
 	
 	int copied = 0;
-
-	// This is done to skip the first '\"' delimiting the string.
-	char* str = (char*) &(input[1]);
+	char* str = (char*) input;
 
 	// This will copy a limited amount of characters
 	while (copied < inputLen && str < strEnd) {
@@ -444,82 +442,44 @@ static char* getEndEscpdSimpleString(char const* str) {
 	return NULL;
 }
 
-
-static int extractStrFromValue(char const* input, char* returnValue, const int maxLen) {
-	char* str = NULL;
+static int extractStrFromValue(TOML* t, char* returnValue, const int maxLen) {
+	char* str = (char*) & (t->str[t->pos]);
 	char* strEnd = NULL;
+	bool isMultiline = false;
 	bool isLiteralString = false;
 
 	// First check if it's a multiline string or not
-	if (strlen(input) > 5) {
-		if (input[0] == '\"' && input[1] == '\"' && input[2] == '\"') {
-			strEnd = strstr(&(input[3]), "\"\"\"");
+	if (strlen(str) > 5) {
+		if (str[0] == '\"' && str[1] == '\"' && str[2] == '\"') {
+			strEnd = strstr(&(str[3]), "\"\"\"");
 			if (strEnd == NULL) return TOMLFormatErr;
-			str = (char*) &(input[3]);
+			str = &(str[3]);
 			strEnd = &(strEnd[-1]);
+			isMultiline = true;
 
-		} else if (input[0] == '\'' && input[1] == '\'' && input[2] == '\'') {
-			strEnd = strstr(&(input[3]), "\'\'\'");
+		} else if (str[0] == '\'' && str[1] == '\'' && str[2] == '\'') {
+			strEnd = strstr(&(str[3]), "\'\'\'");
 			if (strEnd == NULL) return TOMLFormatErr;
-			str = (char*) &(input[3]);
+			str = &(str[3]);
 			strEnd = &(strEnd[-1]);
 			isLiteralString = true;
+			isMultiline = true;
 		}
 	}
 
-	// If 'str' isn't defined, it isn't a multi-string
-	if (!str) {
-		// Skips the string delimitar (\' or \")
-		str = (char*) (&input[1]);
-
-		// Checks the if there are any format error and get if the string is
-		// literal or not
-		if (input[0] == '\'') {
-			isLiteralString = true;
-			strEnd = (char*) strchr(str, '\'');
-
-		} else if (input[0] == '\"') {
-			strEnd = getEndEscpdSimpleString(str);
-			if (!strEnd) return TOMLFormatErr;
-
-		} else {
-			return TOMLFormatErr;
-		}
-
-		int strLen = (int)(strEnd - str);
-
-		if (isLiteralString) {
-			// First, the easy part: If it's just a literal string, it only need to
-			// copy its contents to the given buffer.
-			if ((strLen + 1) > maxLen) return TOMLOutputBufferTooSmall;
-
-			// If it's just an empty string, it will only have to add the '\0' and
-			// return.
-			if (strLen == 0) {
-				returnValue[0] = '\0';
-				return 0;
-			}
-
-			// Copy the string and add a null terminator.
-			memcpy(returnValue, str, strLen);
-			returnValue[strLen] = '\0';
-			return strLen;
-		} else {
-			return processEscapedString(input, strEnd, strLen, returnValue,
-				maxLen, false);
-
-		} // if (literalString) {} else {}
-
-
-	} else {
+	if (isMultiline) {
 		// Skip the first newline if exists. Could be CRLF or LF ended.
-		if (str[0] == '\n') str = (char*) &(str[1]);
-		if (str[0] == '\r' && str[1] == '\n') str = (char*) &str[2];
+		if (str[0] == '\n') str = (char*)&(str[1]);
+		if (str[0] == '\r' && str[1] == '\n') str = (char*)&str[2];
 
 		int strLen = (int)(strEnd - str);
-		// Only add a null terminator in the case of an empty string
 		if (strLen == 0) {
 			returnValue[0] = '\0';
+
+			// Update the latest string position in the structure. The '+3' is
+			// to skip the ending terminators.
+			t->pos += (int) (strEnd - &(t->str[t->pos]) + 3);
+
 			return 0;
 		}
 
@@ -530,18 +490,72 @@ static int extractStrFromValue(char const* input, char* returnValue, const int m
 			// Copy the string to the output buffer and add a null terminator
 			memcpy(returnValue, str, strLen);
 			returnValue[strLen] = '\0';
+
+			t->pos += (int)(strEnd - &(t->str[t->pos]) + 3);
+
 			return strLen;
 		} else {
 			// It process that multi-line string like a normal one. The main
 			// difference in both is just skipping spaces after an escaped
 			// newline.
-			return processEscapedString(input, strEnd, strLen, returnValue,
+
+			t->pos += (int)(strEnd - &(t->str[t->pos]) + 3);
+
+			return processEscapedString(str, strEnd, strLen, returnValue,
 				maxLen, true);
 		}
+	} // if (isMultiline)
 
-	} // if (!str) {} else {}
+	// Checks if there is a literal or formatted single line string
+	if (str[0] == '\'') {
+		// Found a literal single line string!
 
-	return TOMLOtherErr;
+		str = &(str[1]); // Skips ' delimiter
+		strEnd = (char*)strchr(str, '\'');
+		
+		if (!strEnd) return TOMLFormatErr;
+
+		int strLen = (int)(strEnd - str);
+
+		// Update the latest string position for the next usage of the TOML structure
+		t->pos += (int)(strEnd - &(t->str[t->pos]) + 1);
+
+		if ((strLen + 1) > maxLen) return TOMLOutputBufferTooSmall;
+
+		// If it's just an empty string, it will only have to add the '\0' and
+		// return.
+		if (strLen == 0) {
+			returnValue[0] = '\0';
+			return 0;
+		}
+
+		// Copy the string and add a null terminator.
+		memcpy(returnValue, str, strLen);
+		returnValue[strLen] = '\0';
+		return strLen;
+
+	} else if (str[0] == '\"') {
+		// Found an escaped single line string!
+
+		str = &(str[1]); // Skips " delimiter
+		strEnd = getEndEscpdSimpleString(str);
+		if (!strEnd) return TOMLFormatErr;
+
+		int strLen = (int)(strEnd - str);
+
+		// Update the latest string position for the next usage of the TOML structure
+		t->pos += (int)(strEnd - &(t->str[t->pos]) + 1);
+
+		// In the case of not being a literal single line string
+		return processEscapedString(str, strEnd, strLen, returnValue, maxLen, false);
+	} else {
+		// If a string isn't found this key could have a VALID value of another type
+		
+		// TODO: A good idea would be to go back to thre PREVIOUS newline, to the
+		// start of the key name instead of 
+		return TOMLInvalidValue;
+	}
+
 } // static int extractStrFromValue()
 
 
@@ -653,7 +667,7 @@ int getTOMLstr(TOML* t, char const* key, char* value, const int maxLen) {
 	int keyPos = findKeyValPos(t, key);
 	if (keyPos < 0) return keyPos;
 
-	int ret = extractStrFromValue((&t->str[t->pos]), value, maxLen);
+	int ret = extractStrFromValue(t, value, maxLen);
 	if (ret < 0) t->lastError = ret;
 
 	return ret;
