@@ -5,10 +5,18 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include "../src/toml.h"
+#include "../tests/test_util.h"
 
 
-#define getTestResults(n, res) printf("\n ->Test %d: %s\n\n", n, (res == 0)? "PASSED":"FAILED");
+#define getTestResults(n, name, res) \
+	if (res == 0) {\
+		fprintf(stderr, "[ OK ] Test %d (%s)\n\n", n, name);\
+	} else {\
+		fprintf(stderr, "[FAIL] Test %d (%s) Failed with code %d\n\n", n, name, res);\
+	}\
 
+int bufSize = 256;
+char buffer[256];
 
 int test1() {
 	typedef struct {
@@ -41,8 +49,6 @@ active = true";
 
 
 int test2 () {
-	int bufSize = 256;
-	char buffer[256];
 	int ret = 0;
 
 	const char* someStr = "\
@@ -55,33 +61,59 @@ str2 = \"\"\"\\\n\
        \"\"\"\n\
 ";
 
-	printf("Content of someStr: \n%s\nTest start:\n", someStr);
-
 	TOML toml = initTOML(someStr);
 	int ret1 = getTOMLstr(&toml, "str1", buffer, bufSize);
 	if (ret1 < 0) {
 		printf("Error getting str1: %d\n", toml.lastError);
 		ret = ret1;
-	} else {
-		printf("str1: %s\n", buffer);
 	}
 
 	int ret2 = getTOMLstr(&toml, "str2", buffer, bufSize);
 	if (ret2 < 0) {
 		printf("Error getting str2: %d\n", toml.lastError);
 		ret = ret2;
-	} else {
-		printf("str2: %s\n", buffer);
 	}
 
 	return ret;
 }
 
+int test3() {
+	int ret = 0;
 
+	const char* tomlStr = "path = \'\\\\ServerX\\admin$\\system32\\\'\
+\n\
+text = \'\'\'\n\
+The first newline is\n\
+trimmed in raw strings.\n\
+    All other whitespace\n\
+    is preserved.\n\
+\'\'\'";
+
+	TOML toml = initTOML(tomlStr);
+	int ret1 = getTOMLstr(&toml, "path", buffer, bufSize);
+	if (ret1 < 0) {
+		printf("Error getting str1: %d\n", toml.lastError);
+		ret = ret1;
+	} else {
+		printf("path -> %s\n", buffer);
+	}
+
+	int ret2 = getTOMLstr(&toml, "text", buffer, bufSize);
+	if (ret2 < 0) {
+		printf("Error getting str2: %d\n", toml.lastError);
+		ret = ret2;
+	} else {
+		printf("text -> %s\n", buffer);
+	}
+
+	return ret;
+}
 
 int main(void) {
-	//getTestResults(1, test1());
-	getTestResults(2, test2());
+	fprintf(stderr, "Start of CTOML testing:\n\n");
+	//getTestResults(1, "Extracting a boolean", test1());
+	getTestResults(2, "Extracting a single-line and a multi-line escaped string", test2());
+	getTestResults(3, "Extracting a single-line and a multi-line literal string", test3());
 
 	return 0;
 }
