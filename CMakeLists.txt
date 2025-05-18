@@ -12,7 +12,7 @@ set(CMAKE_C_STANDARD_REQUIRED TRUE)
 #set(CMAKE_BUILD_TYPE Release)
 
 # Set the source files.
-set(CTOML_SRC src/toml.c)
+set(CTOML_SRC src/booleans.c src/proc_stments.c src/strings.c src/utils.c src/toml.c)
 
 # Show more warnings and analyze the code looking for common mistakes
 if (CMAKE_C_COMPILER_ID STREQUAL "MSVC")

@@ -5,7 +5,6 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include "../src/toml.h"
-#include "../tests/test_util.h"
 
 
 #define getTestResults(n, name, res) \
