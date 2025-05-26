@@ -1,14 +1,14 @@
 /**
  * @file strings.h
  * @brief Strings extraction
- * 
+ *
  */
 
 // José Miguel Rodríguez Marchena (josemirm)
 
 
 #ifndef __JOSEMIRM_CTOML_STRINGS__
-#define __JOSEMIRM_CTOML_STRINGS__ 
+#define __JOSEMIRM_CTOML_STRINGS__
 
 #include "toml.h"
 #include "utils.h"

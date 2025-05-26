@@ -1,7 +1,7 @@
 /**
  * @file booleans.h
  * @brief Booleans extraction
- * 
+ *
  */
 
 // José Miguel Rodríguez Marchena (josemirm)

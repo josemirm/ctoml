@@ -17,7 +17,9 @@
 int bufSize = 256;
 char buffer[256];
 
-int test1() {
+
+
+int booleanExtractingTest() {
 	typedef struct {
 		char ip[64];
 		char role[32];
@@ -47,7 +49,7 @@ active = true";
 }
 
 
-int test2 () {
+int escapedStringExtractionTest () {
 	int ret = 0;
 
 	const char* someStr = "\
@@ -76,7 +78,8 @@ str2 = \"\"\"\\\n\
 	return ret;
 }
 
-int test3() {
+
+int literalStringExtractionTest() {
 	int ret = 0;
 
 	const char* tomlStr = "path = \'\\\\ServerX\\admin$\\system32\\\'\
@@ -93,26 +96,74 @@ trimmed in raw strings.\n\
 	if (ret1 < 0) {
 		printf("Error getting str1: %d\n", toml.lastError);
 		ret = ret1;
-	} else {
-		printf("path -> %s\n", buffer);
 	}
+	//  else {
+	// 	printf("path -> %s\n", buffer);
+	// }
 
 	int ret2 = getTOMLstr(&toml, "text", buffer, bufSize);
 	if (ret2 < 0) {
 		printf("Error getting str2: %d\n", toml.lastError);
 		ret = ret2;
-	} else {
-		printf("text -> %s\n", buffer);
 	}
+	// else {
+	// 	printf("text -> %s\n", buffer);
+	// }
 
 	return ret;
 }
 
+
+int numberExtractionTest() {
+	int ret = 0;
+	TOMLInt_t number;
+
+	const char* tomlText = "normal = 123\nespaced = 1_234_567\noctal=0o777_111_421\nbin = 0b1100_1010\nhex = 0xdead_beef\n";
+	TOML toml = initTOML(tomlText);
+
+	int tomlRet = getTOMLint(&toml, "normal", &number);
+	if (tomlRet < 0 || number != 123) {
+		printf("Error getting normal number: %d - Number readed: %lld\n", toml.lastError, number);
+		ret = -1;
+	}
+
+	tomlRet = getTOMLint(&toml, "espaced", &number);
+	if (tomlRet < 0 || number != 1234567) {
+		printf("Error getting espaced number: %d - Number readed: %lld\n", toml.lastError, number);
+		ret = -1;
+	}
+
+	tomlRet = getTOMLint(&toml, "octal", &number);
+	if (tomlRet < 0 || number != 0x7FC9311) {
+		printf("Error getting octal number: %d - Number readed: %llo\n", toml.lastError, number);
+		ret = -1;
+	}
+
+	tomlRet = getTOMLint(&toml, "bin", &number);
+	if (tomlRet < 0 || number != 0b11001010) {
+		printf("Error getting bin number: %d - Number readed: %llx\n", toml.lastError, number);
+		ret = -1;
+	}
+
+
+	tomlRet = getTOMLint(&toml, "hex", &number);
+	if (tomlRet < 0 || number != 0xDEADBEEF) {
+		printf("Error getting hex number: %d - Number readed: %llX\n", toml.lastError, number);
+		ret = -1;
+	}
+
+	fprintf(stderr, "[!] TODO: FLOATING POINT NUMBERS TESTS MISSING\n");
+
+	return ret;
+} // int numberExtractionTest()
+
+
 int main(void) {
 	fprintf(stderr, "Start of CTOML testing:\n\n");
-	//getTestResults(1, "Extracting a boolean", test1());
-	getTestResults(2, "Extracting a single-line and a multi-line escaped string", test2());
-	getTestResults(3, "Extracting a single-line and a multi-line literal string", test3());
+	//getTestResults(1, "Extracting a boolean", booleanExtractingTest());
+	getTestResults(2, "Extracting a single-line and a multi-line escaped string", escapedStringExtractionTest());
+	getTestResults(3, "Extracting a single-line and a multi-line literal string", literalStringExtractionTest());
+	getTestResults(4, "Extracting integer and floating-point numbers", numberExtractionTest());
 
 	return 0;
 }

@@ -21,7 +21,7 @@ int compareStrBool(char const* str) {
 
 	// If len < 4 cannot be 'true' or 'false'
 	if (len < 4) {
-		return -1;
+		return TOMLInputError;
 	}
 
 	// Checks for 'true'
@@ -43,5 +43,5 @@ int compareStrBool(char const* str) {
 			return 0;
 	}
 
-	return -1;
+	return TOMLInputError;
 } // int compareStrBool()

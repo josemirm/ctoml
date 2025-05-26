@@ -30,11 +30,3 @@ int skipComments(TOML * t) {
 
 	return 0;
 }
-
-
-int checkValidTOMLStructure(TOML* t) {
-	// Everytime a public TOML function get called, do this check
-	assert(t != NULL && t->str != NULL);
-	if ((t != NULL) && (t->str != NULL) && (strlen(t->str) > 0)) return 0;
-	return -1;
-}

@@ -74,7 +74,7 @@ int processEscapedString(char const* input,
 	char const* strEnd, const int inputLen, char* output, const unsigned int maxOutLen, bool longLine) {
 	// If it is a normal string, it will need to convert the escape
 	// characters to what they represent.
-	
+
 	int copied = 0;
 	char* str = (char*) input;
 
@@ -137,7 +137,7 @@ char* getEndEscpdSimpleString(char const* str) {
 	// Get the next end of the line, and if it does not exist, get to the end of
 	// the string (the null terminator).
 	char* lastStrChar = strchr(str, '\n');
-	
+
 	if (!lastStrChar) {
 		lastStrChar = (char*) &(str[strlen(str) - 1]);
 	} else {
@@ -228,7 +228,7 @@ int extractStrFromValue(TOML* t, char* returnValue, const int maxLen) {
 
 		str = &(str[1]); // Skips ' delimiter
 		strEnd = (char*)strchr(str, '\'');
-		
+
 		if (!strEnd) return TOMLFormatErr;
 
 		int strLen = (int)(strEnd - str);
@@ -266,9 +266,9 @@ int extractStrFromValue(TOML* t, char* returnValue, const int maxLen) {
 		return processEscapedString(str, strEnd, strLen, returnValue, maxLen, false);
 	} else {
 		// If a string isn't found this key could have a VALID value of another type
-		
+
 		// TODO: A good idea would be to go back to thre PREVIOUS newline, to the
-		// start of the key name instead of 
+		// start of the key name instead of
 		return TOMLInvalidValue;
 	}
 

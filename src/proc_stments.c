@@ -199,7 +199,9 @@ int processKeyStmt(TOML* t, char const* key) {
 
 
 int findKeyValPos(TOML* t, char const* key) {
-	assert(t != NULL);
+	// This is done to remove a warning from the compiler. The value of 'key'
+	// is already checked inside preliminaryProcess() before calling this
+	// function, and that's the only function calling this one.
 	assert(key != NULL);
 
 	// If this start to read from the middle, this will make it read the
