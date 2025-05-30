@@ -16,7 +16,7 @@ set(CTOML_SRC src/booleans.c src/numericals.c src/proc_stments.c src/strings.c s
 
 # Show more warnings and analyze the code looking for common mistakes
 if (CMAKE_C_COMPILER_ID STREQUAL "MSVC")
-	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /analyze")
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /analyze /sdl /W4 /fsanitize=address")
 elseif(CMAKE_C_COMPILER_ID STREQUAL "GNU")
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g -Wall -Wextra -fanalyzer")
 elseif(CMAKE_C_COMPILER_ID MATCHES "Clang")
@@ -31,12 +31,7 @@ target_include_directories(ctoml PUBLIC src)
 include(CTest)
 enable_testing()
 
-# add_executable(typesTester tests/types_tester.c)
-# target_link_libraries(typesTester ctoml)
-# add_test(NAME typesTester
-# 		 COMMAND $<TARGET_FILE:typesTester>
-# )
-
+# Add executable for the test
 add_executable(ctomlTest tests/tester.c)
 target_link_libraries(ctomlTest ctoml)
 add_test(NAME ctomlTest
