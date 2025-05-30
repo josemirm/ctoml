@@ -16,7 +16,7 @@ set(CTOML_SRC src/booleans.c src/numericals.c src/proc_stments.c src/strings.c s
 
 # Show more warnings and analyze the code looking for common mistakes
 if (CMAKE_C_COMPILER_ID STREQUAL "MSVC")
-	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /analyze /sdl /W4 /fsanitize=address")
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /analyze /sdl /W4")
 elseif(CMAKE_C_COMPILER_ID STREQUAL "GNU")
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g -Wall -Wextra -fanalyzer")
 elseif(CMAKE_C_COMPILER_ID MATCHES "Clang")

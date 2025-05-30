@@ -12,6 +12,7 @@
 #include "toml.h"
 #include <ctype.h>
 #include <stdbool.h>
+#include <math.h>
 
 int extractIntFromValue(TOML* t, TOMLInt_t* returnValue);
 int extractDoubleFromValue(TOML* t, double* returnValue);
