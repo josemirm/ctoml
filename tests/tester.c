@@ -6,17 +6,22 @@
 #include <stdio.h>
 #include "../src/toml.h"
 
-
-#define getTestResults(n, name, res) \
-	if (res == 0) {\
-		fprintf(stderr, "[ OK ] Test %d (%s)\n\n", n, name);\
-	} else {\
-		fprintf(stderr, "[FAIL] Test %d (%s) Failed with code %d\n\n", n, name, res);\
+#define getTestResults(n, name, funcPtr) \
+	{\
+		fprintf(stderr, "Test %d: %s\n", n, name);\
+\
+		int (*__funcToExecute)() = funcPtr;\
+		int res = __funcToExecute();\
+\
+		if (res == 0) {\
+			fprintf(stderr, "Result: OK\n\n");\
+		} else {\
+			fprintf(stderr, "Result: FAIL. Error code: %d\n\n", res);\
+		}\
 	}\
 
 int bufSize = 256;
 char buffer[256];
-
 
 
 int booleanExtractingTest() {
@@ -114,45 +119,48 @@ trimmed in raw strings.\n\
 }
 
 
+
+void checkIntResult(TOML* toml, char const* key, TOMLInt_t value, int* ret) {
+	TOMLInt_t number;
+	int tomlRet = getTOMLint(toml, key, &number);
+	if (tomlRet < 0 || number != value) {
+		printf("Error getting %s number. Error %d. Number readed: %lld\n", key, toml->lastError, number);
+		*ret = -1;
+	}
+}
+
+void checkDoubleResult(TOML* toml, char const* key, double value, int* ret) {
+	double number;
+	int tomlRet = getTOMLdouble(toml, key, &number);
+	if (tomlRet < 0 || number != value) {
+		printf("Error getting %s number. Error %d. Number readed: %E\n", key, toml->lastError, number);
+		*ret = -1;
+	}
+}
+
 int numberExtractionTest() {
 	int ret = 0;
-	TOMLInt_t number;
 
 	const char* tomlText = "normal = 123\nespaced = 1_234_567\noctal=0o777_111_421\nbin = 0b1100_1010\nhex = 0xdead_beef\n";
 	TOML toml = initTOML(tomlText);
 
-	int tomlRet = getTOMLint(&toml, "normal", &number);
-	if (tomlRet < 0 || number != 123) {
-		printf("Error getting normal number: %d - Number readed: %lld\n", toml.lastError, number);
-		ret = -1;
-	}
-
-	tomlRet = getTOMLint(&toml, "espaced", &number);
-	if (tomlRet < 0 || number != 1234567) {
-		printf("Error getting espaced number: %d - Number readed: %lld\n", toml.lastError, number);
-		ret = -1;
-	}
-
-	tomlRet = getTOMLint(&toml, "octal", &number);
-	if (tomlRet < 0 || number != 0x7FC9311) {
-		printf("Error getting octal number: %d - Number readed: %llo\n", toml.lastError, number);
-		ret = -1;
-	}
-
-	tomlRet = getTOMLint(&toml, "bin", &number);
-	if (tomlRet < 0 || number != 0b11001010) {
-		printf("Error getting bin number: %d - Number readed: %llx\n", toml.lastError, number);
-		ret = -1;
-	}
+	checkIntResult(&toml, "normal", 123, &ret);
+	checkIntResult(&toml, "espaced", 1234567, &ret);
+	checkIntResult(&toml, "octal", 0x7FC9311, &ret);
+	checkIntResult(&toml, "bin", 0b11001010, &ret);
+	checkIntResult(&toml, "hex", 0xDEADBEEF, &ret);
 
 
-	tomlRet = getTOMLint(&toml, "hex", &number);
-	if (tomlRet < 0 || number != 0xDEADBEEF) {
-		printf("Error getting hex number: %d - Number readed: %llX\n", toml.lastError, number);
-		ret = -1;
-	}
+	const char* tomlTextDouble = "dbl1 = +1.0\ndbl2 = 3.14_15\ndbl3 = -0.01\ndbl4 = 5e+22\ndbl5 = 1e06\ndbl6 = -2E-2\ndbl7 = 6.626e-34";
+	TOML tomlDbl = initTOML(tomlTextDouble);
 
-	fprintf(stderr, "[!] TODO: FLOATING POINT NUMBERS TESTS MISSING\n");
+	checkDoubleResult(&tomlDbl, "dbl1", 1.0, &ret);
+	checkDoubleResult(&tomlDbl, "dbl2", 3.1415, &ret);
+	checkDoubleResult(&tomlDbl, "dbl3", -0.01, &ret);
+	checkDoubleResult(&tomlDbl, "dbl4", 5e+22, &ret);
+	checkDoubleResult(&tomlDbl, "dbl5", 1e06, &ret);
+	checkDoubleResult(&tomlDbl, "dbl6", -2E-2, &ret);
+	checkDoubleResult(&tomlDbl, "dbl7", 6.626e-34, &ret);	
 
 	return ret;
 } // int numberExtractionTest()
@@ -160,10 +168,11 @@ int numberExtractionTest() {
 
 int main(void) {
 	fprintf(stderr, "Start of CTOML testing:\n\n");
+
 	//getTestResults(1, "Extracting a boolean", booleanExtractingTest());
-	getTestResults(2, "Extracting a single-line and a multi-line escaped string", escapedStringExtractionTest());
-	getTestResults(3, "Extracting a single-line and a multi-line literal string", literalStringExtractionTest());
-	getTestResults(4, "Extracting integer and floating-point numbers", numberExtractionTest());
+	getTestResults(2, "Extracting a single-line and a multi-line escaped string", escapedStringExtractionTest);
+	getTestResults(3, "Extracting a single-line and a multi-line literal string", literalStringExtractionTest);
+	getTestResults(4, "Extracting integer and floating-point numbers", numberExtractionTest);
 
 	return 0;
 }
