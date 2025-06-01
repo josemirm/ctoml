@@ -282,18 +282,19 @@ int extractDoubleFromValue(TOML* t, double* returnValue) {
 					(t->str[t->pos + 1] == '_')) {
 			// If double underscore inserted is an error
 			return TOMLFormatErr;
+
 		} else {
 			// If some other character found, go to the next check
 			break;
 		}
 
 		t->pos++;
-		continue;
 	}
 
 	// Now get the decimals and exponents
-	TOMLInt_t decs = 0;
-	TOMLInt_t exp = 0;
+	double decs = 0.0;
+	double decsPos = 0.1;
+	double exp = 0.0;
 	bool negativeExp = false;
 
 	if (t->str[t->pos] == '.') {
@@ -301,9 +302,18 @@ int extractDoubleFromValue(TOML* t, double* returnValue) {
 
 		// Get the decimals
 		t->pos++;
-		while ((t->pos < t->len) && isdigit(t->str[t->pos])) {
-			decs *= 10;
-			decs += t->str[t->pos] - '0';
+		while (t->pos < t->len) {
+			if (isdigit(t->str[t->pos])) {
+				decs += (double)(t->str[t->pos] - '0') * decsPos;
+				decsPos /= 10.0;
+
+			} else if (t->str[t->pos] == '_') {
+				if (t->str[t->pos + 1] == '_') return TOMLFormatErr;
+
+			} else {
+				break;
+			}
+
 			t->pos++;
 		}
 	}
@@ -320,15 +330,23 @@ int extractDoubleFromValue(TOML* t, double* returnValue) {
 
 		if (!isdigit(t->str[t->pos])) return TOMLFormatErr;
 		while ( (t->pos < t->len) && isdigit(t->str[t->pos])) {
-			exp *= 10;
+			exp *= 10.0;
 			exp += t->str[t->pos] - '0';
 			t->pos++;
 		}
+
+		if (negativeExp) exp = -exp;
 	}
 
 	// There should be a blank space after entering the number, and not any
 	// other kind of character
-	if (!isspace(t->str[t->pos])) return TOMLFormatErr;
+	if ((t->pos < (t->len - 1)) && !isspace(t->str[t->pos])) return TOMLFormatErr;
+
+	// Join everything and return the double value
+	double ret = (isNegative) ? (((double)-mantissa) - decs) : (((double)mantissa) + decs);
+	ret *= (exp != 0.0) ? pow(10, (double)exp) : 1.0;
+
+	*returnValue = ret;
 
 	return 0;
 } // int extractDoubleFromValue()

@@ -135,6 +135,8 @@ void checkDoubleResult(TOML* toml, char const* key, double value, int* ret) {
 	if (tomlRet < 0 || number != value) {
 		printf("Error getting %s number. Error %d. Number readed: %E\n", key, toml->lastError, number);
 		*ret = -1;
+	} else {
+		printf("[OK] %s = %E\n", key, value);
 	}
 }
 
